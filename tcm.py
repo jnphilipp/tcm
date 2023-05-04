@@ -422,10 +422,12 @@ def lda_surprisal(
 ) -> csr_matrix:
     """Calculate LDA based surprisal."""
 
-    def surprisal(doc: np.ndarray, tdata: np.ndarray) -> Tuple[List[int], List[int]]:
+    def surprisal(doc: csr_matrix) -> Tuple[List[int], List[int]]:
         data = []
         indices = []
         total = doc.sum()
+        tdata = lda.transform(doc).squeeze()
+        doc = doc.toarray().squeeze()
         for i in np.nonzero(doc)[0]:
             data.append(
                 (-1.0 / lda.n_components)
@@ -443,9 +445,6 @@ def lda_surprisal(
     logging.debug("Calculate topic-word matrix.")
     topics_words = lda.components_ / lda.components_.sum(axis=1)[:, np.newaxis]
 
-    logging.debug("Tranform data.")
-    tdata = lda.transform(data)
-
     logging.debug("Calculate surprisal.")
     with Parallel(
         n_jobs=joblib.cpu_count(),
@@ -458,7 +457,7 @@ def lda_surprisal(
         indptr = [0]
         for i, j in parallel(
             [
-                delayed(surprisal)(data.getrow(i).toarray().squeeze(), tdata[i])
+                delayed(surprisal)(data.getrow(i))
                 for i in range(data.shape[0])
             ]
         ):
