@@ -144,7 +144,12 @@ def data_load(
             else:
                 raise RuntimeError(f"Unrecognized format for line {text}.")
         for k, v in counter.items():
-            idx = vocab.setdefault(k, len(vocab))
+            if words is None:
+                idx = vocab.setdefault(k, len(vocab))
+            elif k not in vocab:
+                continue
+            else:
+                idx = vocab[k]
             data.append(v)
             indices.append(idx)
         return data, indices
@@ -159,7 +164,7 @@ def data_load(
     indptr = [0]
 
     fopen: Callable
-    vocab: Dict[str, int] = {}
+    vocab: Dict[str, int] = {} if words is None else {w: i for i, w in enumerate(words)}
     for path in paths:
         if isinstance(path, str):
             path = Path(path)
@@ -208,8 +213,12 @@ def data_load(
                 raise RuntimeError("Unsopported file type.")
     logging.info(f"Loaded {len(indptr) - 1} texts with {len(vocab)} words.")
     return (
-        csr_matrix((data, indices, indptr), dtype=np.uint),
-        [k for k, v in sorted(vocab.items(), key=lambda x: x[1])],
+        csr_matrix(
+            (data, indices, indptr), shape=(len(indptr) - 1, len(vocab)), dtype=np.uint
+        ),
+        [k for k, v in sorted(vocab.items(), key=lambda x: x[1])]
+        if words is None
+        else words,
     )
 
 
@@ -260,7 +269,7 @@ def surprisal_save(
                             if tokenizer is not None:
                                 row[f"{field}-surprisal"] = ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}"
+                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
                                         for w in tokenizer(row[field].strip())
                                     ]
                                 )
@@ -270,6 +279,8 @@ def surprisal_save(
                                         ",".join(
                                             [
                                                 f"{w}|{doc[rwords[w]]}"
+                                                if w in rwords
+                                                else w
                                                 for w in s.split(",")
                                             ]
                                         )
@@ -279,7 +290,7 @@ def surprisal_save(
                             elif "," in row[field]:
                                 row[f"{field}-surprisal"] = ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}"
+                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
                                         for w in row[field].strip().split(",")
                                     ]
                                 )
@@ -305,7 +316,7 @@ def surprisal_save(
                             fw.write(
                                 ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}"
+                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
                                         for w in tokenizer(line.strip())
                                     ]
                                 )
@@ -320,6 +331,8 @@ def surprisal_save(
                                         ",".join(
                                             [
                                                 f"{w}|{doc[rwords[w]]}"
+                                                if w in rwords
+                                                else w
                                                 for w in s.split(",")
                                             ]
                                         )
@@ -334,7 +347,7 @@ def surprisal_save(
                             fw.write(
                                 ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}"
+                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
                                         for w in line.strip().split(",")
                                     ]
                                 )
@@ -454,10 +467,7 @@ def lda_surprisal(
         indices = []
         indptr = [0]
         for i, j in parallel(
-            [
-                delayed(surprisal)(data.getrow(i))
-                for i in range(data.shape[0])
-            ]
+            [delayed(surprisal)(data.getrow(i)) for i in range(data.shape[0])]
         ):
             surprisal_data += i
             indices += j
@@ -728,6 +738,9 @@ if __name__ == "__main__":
         args.batch_size,
         verbose=verbosity,
     )
+    if not args.words.exists():
+        words_save(args.words, words)
+
     if args.model == "lda":
         if args.model_file.exists():
             lda = lda_load(args.model_file)
@@ -753,7 +766,6 @@ if __name__ == "__main__":
         if "train" in args.action:
             lda_train(lda, data)
             lda_save(lda, args.model_file)
-            words_save(args.words, words)
         if "surprisal" in args.action:
             surprisal_data = lda_surprisal(lda, data)
             surprisal_save(args.data, args.fields, surprisal_data, words)
