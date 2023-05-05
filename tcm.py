@@ -154,6 +154,10 @@ def data_load(
     if isinstance(fields, str):
         fields = [fields]
 
+    data = []
+    indices = []
+    indptr = [0]
+
     fopen: Callable
     vocab: Dict[str, int] = {}
     for path in paths:
@@ -178,9 +182,6 @@ def data_load(
                     require="sharedmem",
                     batch_size=batch_size,
                 ) as parallel:
-                    data = []
-                    indices = []
-                    indptr = [0]
                     for i, j in parallel(
                         [
                             delayed(convert_line)(*(row[field] for field in fields))
@@ -197,9 +198,6 @@ def data_load(
                     require="sharedmem",
                     batch_size=batch_size,
                 ) as parallel:
-                    data = []
-                    indices = []
-                    indptr = [0]
                     for i, j in parallel(
                         [delayed(convert_line)(line.strip()) for line in f]
                     ):
