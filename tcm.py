@@ -560,6 +560,13 @@ if __name__ == "__main__":
         help="file to load words from and/or save to, either txt or json optionally "
         + "gzip compressed.",
     )
+    parser.add_argument(
+        "-t",
+        "--tokenize",
+        action="store_true",
+        help="use the build in tokenizer to tokenize, do not use with already "
+        + "tokenized data.",
+    )
 
     # lda
     lda_config = parser.add_argument_group("LDA config")
@@ -734,7 +741,7 @@ if __name__ == "__main__":
         args.data,
         args.fields,
         words_load(args.words) if args.words.exists() else None,
-        None,
+        default_tokenizer if args.tokenize else None,
         args.batch_size,
         verbose=verbosity,
     )
