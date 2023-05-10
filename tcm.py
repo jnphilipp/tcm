@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # vim: ft=python fileencoding=utf-8 sts=4 sw=4 et:
-# Copyright (C) 2019-2022 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
+# Copyright (C) 2023 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
 #
-# TCM.
+# Topic Context Model (TCM).
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
