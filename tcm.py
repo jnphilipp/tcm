@@ -476,6 +476,15 @@ def lda_surprisal(
     return csr_matrix((surprisal_data, indices, indptr))
 
 
+def lda_train(
+    lda: LatentDirichletAllocation,
+    data: csr_matrix,
+) -> None:
+    """Train TCM with LDA."""
+    logging.info(f"Train LDA for max {lda.max_iter} iterations.")
+    lda.fit(data)
+
+
 def default_tokenizer(text: str) -> List[str]:
     words = []
     text = re.sub(r"https?://[^\s]+", "URL", text)
@@ -491,15 +500,6 @@ def default_tokenizer(text: str) -> List[str]:
         if i == 0 or (word == "NUM" and words[i - 1] != word) or word != "NUM"
     ]
     return words
-
-
-def lda_train(
-    lda: LatentDirichletAllocation,
-    data: csr_matrix,
-) -> None:
-    """Train TCM with LDA."""
-    logging.info(f"Train LDA for max {lda.max_iter} iterations.")
-    lda.fit(data)
 
 
 def filter_info(rec: logging.LogRecord) -> bool:
