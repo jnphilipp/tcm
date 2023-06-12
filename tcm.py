@@ -227,6 +227,7 @@ def surprisal_save(
     fields: Optional[str | List[str]],
     surprisal_data: csr_matrix,
     words: List[str],
+    surprisal_file_name_part: str = "-surprisal",
     tokenizer: Optional[Callable[[str], List[str]]] = None,
 ) -> None:
     if isinstance(paths, str) or isinstance(paths, Path):
@@ -240,7 +241,8 @@ def surprisal_save(
         if isinstance(path, str):
             path = Path(path)
         out_path = path.parent / re.sub(
-            r"(.+?)(\.(txt|.csv)(\.gz)?)$", r"\g<1>-surprisal\g<2>", path.name
+            r"(.+?)(\.(txt|.csv)(\.gz)?)$", rf"\g<1>{surprisal_file_name_part}\g<2>",
+            path.name
         )
 
         if path.name.endswith(".gz"):
@@ -567,6 +569,12 @@ if __name__ == "__main__":
         help="use the build in tokenizer to tokenize, do not use with already "
         + "tokenized data.",
     )
+    parser.add_argument(
+        "--surprisal-file-name-part",
+        type=str,
+        default="-surprisal",
+        help="added to the name of input file to when saving surprisal data."
+    )
 
     # lda
     lda_config = parser.add_argument_group("LDA config")
@@ -775,4 +783,7 @@ if __name__ == "__main__":
             lda_save(lda, args.model_file)
         if "surprisal" in args.action:
             surprisal_data = lda_surprisal(lda, data)
-            surprisal_save(args.data, args.fields, surprisal_data, words)
+            surprisal_save(
+                args.data, args.fields, surprisal_data, words,
+                args.surprisal_file_name_part
+            )
