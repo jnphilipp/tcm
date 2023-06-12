@@ -553,7 +553,7 @@ if __name__ == "__main__":
         "--fields",
         nargs="+",
         type=str,
-        help="field(s) to load texts when using csv data.",
+        help="field(s) to load texts from, when using csv data.",
     )
     parser.add_argument(
         "--words",
