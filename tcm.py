@@ -67,6 +67,14 @@ class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
 
 
 def words_load(path: Path) -> List[str]:
+    """Load words from file, can either be a text of json file.
+
+    Args:
+     * path: path to load words from
+
+    Returns:
+     * list of words
+    """
     logging.info(f"Load words from {path}.")
     fopen: Callable
     words: List[str] = []
@@ -92,6 +100,12 @@ def words_load(path: Path) -> List[str]:
 
 
 def words_save(path: Path, words: List[str]) -> None:
+    """Save words to file, can either be a text of json file.
+
+    Args:
+     * path: path to save words to
+     * words: list of words
+    """
     logging.info(f"Save words to {path}.")
     fopen: Callable
     if path.name.endswith(".gz"):
@@ -115,6 +129,7 @@ def data_load(
     fields: Optional[str | List[str]],
     words: Optional[List[str]] = None,
     tokenizer: Optional[Callable[[str], List[str]]] = None,
+    file_as_text: bool = False,
     batch_size: int = 128,
     verbose: int = 10,
 ) -> Tuple[csr_matrix, List[str]]:
@@ -165,7 +180,7 @@ def data_load(
 
     fopen: Callable
     vocab: Dict[str, int] = {} if words is None else {w: i for i, w in enumerate(words)}
-    for path in paths:
+    for c, path in enumerate(paths):
         if isinstance(path, str):
             path = Path(path)
         logging.info(f"Load data from {path}.")
@@ -211,6 +226,9 @@ def data_load(
                         indptr.append(len(indices))
             else:
                 raise RuntimeError("Unsopported file type.")
+        if file_as_text:
+            indptr = indptr[: c + 1]
+            indptr.append(len(indices))
     logging.info(f"Loaded {len(indptr) - 1} texts with {len(vocab)} words.")
     return (
         csr_matrix(
@@ -228,8 +246,20 @@ def surprisal_save(
     surprisal_data: csr_matrix,
     words: List[str],
     surprisal_file_name_part: str = "-surprisal",
+    file_as_text: bool = False,
     tokenizer: Optional[Callable[[str], List[str]]] = None,
 ) -> None:
+    """Save surprisal values.
+
+    Args:
+     * paths:
+     * fields:
+     * surprisal_data:
+     * words:
+     * surprisal_file_name_part:
+     * file_as_text:
+     * tokenizer:
+    """
     if isinstance(paths, str) or isinstance(paths, Path):
         paths = [paths]
 
@@ -241,8 +271,9 @@ def surprisal_save(
         if isinstance(path, str):
             path = Path(path)
         out_path = path.parent / re.sub(
-            r"(.+?)(\.(txt|.csv)(\.gz)?)$", rf"\g<1>{surprisal_file_name_part}\g<2>",
-            path.name
+            r"(.+?)(\.(txt|.csv)(\.gz)?)$",
+            rf"\g<1>{surprisal_file_name_part}\g<2>",
+            path.name,
         )
 
         if path.name.endswith(".gz"):
@@ -252,6 +283,10 @@ def surprisal_save(
         else:
             raise RuntimeError("Unsopported file type.")
         with fopen(path, "rt", encoding="utf8") as fr:
+            if file_as_text:
+                doc = surprisal_data.getrow(idx).toarray().squeeze()
+                idx += 1
+
             with fopen(out_path, "wt", encoding="utf8") as fw:
                 logging.info(f"Save surprisal data for {path} in {out_path}.")
                 if path.name.endswith((".csv", ".csv.gz")):
@@ -265,8 +300,9 @@ def surprisal_save(
                         dialect=dialect,
                     )
                     for row in reader:
-                        doc = surprisal_data.getrow(idx).toarray().squeeze()
-                        idx += 1
+                        if not file_as_text:
+                            doc = surprisal_data.getrow(idx).toarray().squeeze()
+                            idx += 1
                         for field in fields:
                             if tokenizer is not None:
                                 row[f"{field}-surprisal"] = ",".join(
@@ -310,8 +346,9 @@ def surprisal_save(
                             line_idx = None
                             line = line.strip()
 
-                        doc = surprisal_data.getrow(idx).toarray().squeeze()
-                        idx += 1
+                        if not file_as_text:
+                            doc = surprisal_data.getrow(idx).toarray().squeeze()
+                            idx += 1
                         if tokenizer is not None:
                             if line_idx is not None:
                                 fw.write(f"{line_idx}\t")
@@ -417,6 +454,14 @@ def lda_build(
 
 
 def lda_load(path: Path) -> LatentDirichletAllocation:
+    """Load LDA from file.
+
+    Args:
+     * path: file to load lda from
+
+    Returns:
+     * LDA
+    """
     logging.info(f"Load LDA from {path}.")
     return joblib.load(path)
 
@@ -488,6 +533,14 @@ def lda_train(
 
 
 def default_tokenizer(text: str) -> List[str]:
+    """Tokenize words using a simple regex matching word boundaries.
+
+    Args:
+     * text: text to tokenize
+
+    Returns:
+     * text as a list of words
+    """
     words = []
     text = re.sub(r"https?://[^\s]+", "URL", text)
     for m in re.finditer(r"\b(\w+(-\w+)+|\w+&\w+|\w+)\b", text):
@@ -570,10 +623,15 @@ if __name__ == "__main__":
         + "tokenized data.",
     )
     parser.add_argument(
+        "--file-as-text",
+        action="store_true",
+        help="treat all texts in a file as a single text.",
+    )
+    parser.add_argument(
         "--surprisal-file-name-part",
         type=str,
         default="-surprisal",
-        help="added to the name of input file to when saving surprisal data."
+        help="added to the name of input file to when saving surprisal data.",
     )
 
     # lda
@@ -750,6 +808,7 @@ if __name__ == "__main__":
         args.fields,
         words_load(args.words) if args.words.exists() else None,
         default_tokenizer if args.tokenize else None,
+        args.file_as_text,
         args.batch_size,
         verbose=verbosity,
     )
@@ -784,6 +843,10 @@ if __name__ == "__main__":
         if "surprisal" in args.action:
             surprisal_data = lda_surprisal(lda, data)
             surprisal_save(
-                args.data, args.fields, surprisal_data, words,
-                args.surprisal_file_name_part
+                args.data,
+                args.fields,
+                surprisal_data,
+                words,
+                args.surprisal_file_name_part,
+                args.file_as_text,
             )
