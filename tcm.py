@@ -34,12 +34,13 @@ from argparse import (
     RawTextHelpFormatter,
 )
 from collections import Counter
+from dataclasses import dataclass
 from csv import DictReader, DictWriter, Sniffer
 from joblib import Parallel, delayed
 from scipy.sparse import csr_matrix
-from sklearn.decomposition import LatentDirichletAllocation
+from sklearn.decomposition import LatentDirichletAllocation, TruncatedSVD
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Type, TypeVar
 
 
 __author__ = "J. Nathanael Philipp (jnphilipp)"
@@ -64,6 +65,141 @@ class ArgFormatter(ArgumentDefaultsHelpFormatter, RawTextHelpFormatter):
     """Combination of ArgumentDefaultsHelpFormatter and RawTextHelpFormatter."""
 
     pass
+
+
+@dataclass
+class TopicContextModel:
+    """Topic Context Model (TCM)."""
+
+    T = TypeVar("T", bound="TopicContextModel")
+
+    model: LatentDirichletAllocation | TruncatedSVD
+    verbose: int = 0
+    batch_size: int = 128
+
+    @classmethod
+    def LatentDirichletAllocation(  # noqa: N802
+        cls: Type[T],
+        n_components: int = 10,
+        doc_topic_prior: Optional[float] = None,
+        topic_word_prior: Optional[float] = None,
+        learning_method: str = "batch",
+        learning_decay: float = 0.7,
+        learning_offset: float = 10.0,
+        max_iter: int = 10,
+        batch_size: int = 128,
+        evaluate_every: int = -1,
+        total_samples: int = 1000000,
+        perp_tol: float = 0.1,
+        mean_change_tol: float = 0.001,
+        max_doc_update_iter: int = 100,
+        n_jobs: Optional[int] = None,
+        verbose: int = 0,
+        random_state: Optional[int] = None,
+    ) -> T:
+        """Build Topic Context Model with Latent Dirichlet Allocation.
+
+        https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.LatentDirichletAllocation.html
+        """
+        assert learning_method in ["batch", "online"]
+
+        return cls(
+            LatentDirichletAllocation(
+                n_components=n_components,
+                doc_topic_prior=doc_topic_prior,
+                topic_word_prior=topic_word_prior,
+                learning_method=learning_method,
+                learning_decay=learning_decay,
+                learning_offset=learning_offset,
+                max_iter=max_iter,
+                batch_size=batch_size,
+                evaluate_every=evaluate_every,
+                total_samples=total_samples,
+                perp_tol=perp_tol,
+                mean_change_tol=mean_change_tol,
+                max_doc_update_iter=max_doc_update_iter,
+                n_jobs=n_jobs,
+                verbose=verbose,
+                random_state=random_state,
+            ),
+            verbose=verbose,
+            batch_size=batch_size,
+        )
+
+    @classmethod
+    def load(cls: Type[T], path: str | Path) -> T:
+        """Load a Topic Context Model from a file.
+
+        Args:
+         * path: model file to load
+
+        Returns:
+         * a Topic Context Model
+        """
+        return joblib.load(path)
+
+    def fit(self, data: csr_matrix) -> None:
+        """Train Topic Context Model in the given data.
+
+        Args:
+         * data: sparse document term matrix to train on
+        """
+        self.model.fit(data)
+
+    def save(self, path: str | Path) -> None:
+        """Save this Topic Context Model to a file using `joblib.dump`."""
+        joblib.dump(self, path)
+
+    def surprisal(
+        self,
+        data: csr_matrix,
+        verbose: int = 0,
+        batch_size: int = 128,
+    ) -> csr_matrix:
+        """Calculate the surprisal."""
+
+        def surprisal(doc: csr_matrix) -> Tuple[List[int], List[int]]:
+            data = []
+            indices = []
+            total = doc.sum()
+            tdata = self.model.transform(doc).squeeze()
+            doc = doc.toarray().squeeze()
+            for i in np.nonzero(doc)[0]:
+                data.append(
+                    (-1.0 / self.model.n_components)
+                    * sum(
+                        [
+                            math.log2((doc[i] / total) * topics_words[t, i] * tdata[t])
+                            for t in range(self.model.n_components)
+                        ]
+                    )
+                )
+                indices.append(i)
+            return data, indices
+
+        if isinstance(self.model, LatentDirichletAllocation):
+            topics_words = (
+                self.model.components_
+                / self.model.components_.sum(axis=1)[:, np.newaxis]
+            )
+
+        with Parallel(
+            n_jobs=joblib.cpu_count(),
+            verbose=verbose,
+            require="sharedmem",
+            batch_size=batch_size,
+        ) as parallel:
+            surprisal_data = []
+            indices = []
+            indptr = [0]
+            for i, j in parallel(
+                [delayed(surprisal)(data.getrow(i)) for i in range(data.shape[0])]
+            ):
+                surprisal_data += i
+                indices += j
+                indptr.append(len(indices))
+
+        return csr_matrix((surprisal_data, indices, indptr))
 
 
 def words_load(path: Path) -> List[str]:
@@ -398,140 +534,6 @@ def surprisal_save(
                             )
 
 
-def lda_build(
-    n_components: int = 10,
-    doc_topic_prior: Optional[float] = None,
-    topic_word_prior: Optional[float] = None,
-    learning_method: str = "batch",
-    learning_decay: float = 0.7,
-    learning_offset: float = 10.0,
-    max_iter: int = 10,
-    batch_size: int = 128,
-    evaluate_every: int = -1,
-    total_samples: int = 1000000,
-    perp_tol: float = 0.1,
-    mean_change_tol: float = 0.001,
-    max_doc_update_iter: int = 100,
-    n_jobs: Optional[int] = None,
-    verbose: int = 0,
-    random_state: Optional[int] = None,
-) -> LatentDirichletAllocation:
-    """Build Latent Dirichlet Allocation model.
-
-    https://scikit-learn.org/stable/modules/generated/
-    sklearn.decomposition.LatentDirichletAllocation.html
-    """
-    assert learning_method in ["batch", "online"]
-
-    logging.info(f"Build LDA with {n_components} topics.")
-    logging.debug(
-        f"doc_topic_prior={doc_topic_prior}, topic_word_prior={topic_word_prior}, "
-        f"learning_method={learning_method}, learning_decay={learning_decay}, "
-        f"learning_offset={learning_offset}, max_iter={max_iter}, "
-        f"batch_size={batch_size}, evaluate_every={evaluate_every}, "
-        f"total_samples={total_samples}, perp_tol={perp_tol}, "
-        f"mean_change_tol={mean_change_tol}, max_doc_update_iter={max_doc_update_iter},"
-        f" n_jobs={n_jobs}, verbose={verbose}, random_state={random_state}"
-    )
-    return LatentDirichletAllocation(
-        n_components=n_components,
-        doc_topic_prior=doc_topic_prior,
-        topic_word_prior=topic_word_prior,
-        learning_method=learning_method,
-        learning_decay=learning_decay,
-        learning_offset=learning_offset,
-        max_iter=max_iter,
-        batch_size=batch_size,
-        evaluate_every=evaluate_every,
-        total_samples=total_samples,
-        perp_tol=perp_tol,
-        mean_change_tol=mean_change_tol,
-        max_doc_update_iter=max_doc_update_iter,
-        n_jobs=n_jobs,
-        verbose=verbose,
-        random_state=random_state,
-    )
-
-
-def lda_load(path: Path) -> LatentDirichletAllocation:
-    """Load LDA from file.
-
-    Args:
-     * path: file to load lda from
-
-    Returns:
-     * LDA
-    """
-    logging.info(f"Load LDA from {path}.")
-    return joblib.load(path)
-
-
-def lda_save(lda: LatentDirichletAllocation, path: Path) -> None:
-    """Save LDA."""
-    logging.info(f"Save LDA to {path}.")
-    joblib.dump(lda, path)
-
-
-def lda_surprisal(
-    lda: LatentDirichletAllocation,
-    data: csr_matrix,
-    verbose: int = 0,
-    batch_size: int = 128,
-) -> csr_matrix:
-    """Calculate LDA based surprisal."""
-
-    def surprisal(doc: csr_matrix) -> Tuple[List[int], List[int]]:
-        data = []
-        indices = []
-        total = doc.sum()
-        tdata = lda.transform(doc).squeeze()
-        doc = doc.toarray().squeeze()
-        for i in np.nonzero(doc)[0]:
-            data.append(
-                (-1.0 / lda.n_components)
-                * sum(
-                    [
-                        math.log2((doc[i] / total) * topics_words[t, i] * tdata[t])
-                        for t in range(lda.n_components)
-                    ]
-                )
-            )
-            indices.append(i)
-        return data, indices
-
-    logging.info("Calculate LDA surprisal.")
-    logging.debug("Calculate topic-word matrix.")
-    topics_words = lda.components_ / lda.components_.sum(axis=1)[:, np.newaxis]
-
-    logging.debug("Calculate surprisal.")
-    with Parallel(
-        n_jobs=joblib.cpu_count(),
-        verbose=verbose,
-        require="sharedmem",
-        batch_size=batch_size,
-    ) as parallel:
-        surprisal_data = []
-        indices = []
-        indptr = [0]
-        for i, j in parallel(
-            [delayed(surprisal)(data.getrow(i)) for i in range(data.shape[0])]
-        ):
-            surprisal_data += i
-            indices += j
-            indptr.append(len(indices))
-
-    return csr_matrix((surprisal_data, indices, indptr))
-
-
-def lda_train(
-    lda: LatentDirichletAllocation,
-    data: csr_matrix,
-) -> None:
-    """Train TCM with LDA."""
-    logging.info(f"Train LDA for max {lda.max_iter} iterations.")
-    lda.fit(data)
-
-
 def default_tokenizer(text: str) -> List[str]:
     """Tokenize words using a simple regex matching word boundaries.
 
@@ -573,13 +575,6 @@ if __name__ == "__main__":
         "--version",
         action="version",
         version=VERSION,
-    )
-    parser.add_argument(
-        "-m",
-        "--model",
-        choices=["lda", "lsa"],
-        default="lda",
-        help="which model to use.",
     )
     parser.add_argument(
         "--model-file",
@@ -635,34 +630,37 @@ if __name__ == "__main__":
     )
 
     # lda
-    lda_config = parser.add_argument_group("LDA config")
-    lda_config.add_argument(
+    subparsers = parser.add_subparsers(
+        title="models", help="which model to use.", dest="model"
+    )
+    lda_parser = subparsers.add_parser("lda", help="use LDA as model for TCM.")
+    lda_parser.add_argument(
         "--n-components",
         type=int,
         default=10,
         help="number of topics.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--doc-topic-prior",
         type=float,
         default=None,
         help="prior of document topic distribution `theta`. If the value is None, "
         + "defaults to `1 / n_components`.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--topic-word-prior",
         type=float,
         default=None,
         help="prior of topic word distribution `beta`. If the value is None, defaults "
         + "to `1 / n_components`.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--learning-method",
         type=str,
         default="batch",
         help="method used to update `_component`.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--learning-decay",
         type=float,
         default=0.7,
@@ -672,7 +670,7 @@ if __name__ == "__main__":
         + "update method is same as batch learning. In the literature, this is called "
         + "kappa.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--learning-offset",
         type=float,
         default=10.0,
@@ -680,20 +678,20 @@ if __name__ == "__main__":
         + "learning.  It should be greater than 1.0. In the literature, this is called "
         + "tau_0.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--max-iter",
         type=int,
         default=10,
         help="the maximum number of passes over the training data (aka epochs).",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--batch-size",
         type=int,
         default=128,
         help="number of documents to use in each EM iteration. Only used in online "
         + "learning.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--evaluate-every",
         type=int,
         default=-1,
@@ -703,34 +701,34 @@ if __name__ == "__main__":
         + "training time. Evaluating perplexity in every iteration might increase "
         + "training time up to two-fold.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--perp-tol",
         type=float,
         default=0.1,
         help="perplexity tolerance in batch learning. Only used when `evaluate_every` "
         + "is greater than 0.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--mean-change-tol",
         type=float,
         default=0.001,
         help="stopping tolerance for updating document topic distribution in E-step.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--max-doc-update-iter",
         type=int,
         default=100,
         help="max number of iterations for updating document topic distribution in the "
         + "E-step.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--n-jobs",
         type=int,
         default=None,
         help="the number of jobs to use in the E-step. `None` means 1. `-1` means "
         + "using all processors.",
     )
-    lda_config.add_argument(
+    lda_parser.add_argument(
         "--random-state",
         type=int,
         default=None,
@@ -815,38 +813,38 @@ if __name__ == "__main__":
     if not args.words.exists():
         words_save(args.words, words)
 
-    if args.model == "lda":
-        if args.model_file.exists():
-            lda = lda_load(args.model_file)
-        else:
-            lda = lda_build(
-                total_samples=data.size,
-                verbose=verbosity,
-                n_components=args.n_components,
-                doc_topic_prior=args.doc_topic_prior,
-                topic_word_prior=args.topic_word_prior,
-                learning_method=args.learning_method,
-                learning_decay=args.learning_decay,
-                learning_offset=args.learning_offset,
-                max_iter=args.max_iter,
-                batch_size=args.batch_size,
-                evaluate_every=args.evaluate_every,
-                perp_tol=args.perp_tol,
-                mean_change_tol=args.mean_change_tol,
-                max_doc_update_iter=args.max_doc_update_iter,
-                n_jobs=args.n_jobs,
-                random_state=args.random_state,
-            )
-        if "train" in args.action:
-            lda_train(lda, data)
-            lda_save(lda, args.model_file)
-        if "surprisal" in args.action:
-            surprisal_data = lda_surprisal(lda, data)
-            surprisal_save(
-                args.data,
-                args.fields,
-                surprisal_data,
-                words,
-                args.surprisal_file_name_part,
-                args.file_as_text,
-            )
+    if args.model_file.exists():
+        tcm = TopicContextModel.load(args.model_file)
+    elif args.model == "lda":
+        tcm = TopicContextModel.LatentDirichletAllocation(
+            args.n_components,
+            args.doc_topic_prior,
+            args.topic_word_prior,
+            args.learning_method,
+            args.learning_decay,
+            args.learning_offset,
+            args.max_iter,
+            args.batch_size,
+            args.evaluate_every,
+            data.size,
+            args.perp_tol,
+            args.mean_change_tol,
+            args.max_doc_update_iter,
+            args.n_jobs,
+            verbosity,
+            args.random_state,
+        )
+
+    if "train" in args.action:
+        tcm.fit(data)
+        tcm.save(args.model_file)
+    if "surprisal" in args.action:
+        surprisal_data = tcm.surprisal(data)
+        surprisal_save(
+            args.data,
+            args.fields,
+            surprisal_data,
+            words,
+            args.surprisal_file_name_part,
+            args.file_as_text,
+        )
