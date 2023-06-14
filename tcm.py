@@ -127,6 +127,40 @@ class TopicContextModel:
         )
 
     @classmethod
+    def LatentSemanticAnalysis(  # noqa: N802
+        cls: Type[T],
+        n_components: int = 2,
+        algorithm: str = "randomized",
+        n_iter: int = 5,
+        n_oversamples: int = 10,
+        power_iteration_normalizer: str = "auto",
+        random_state: Optional[int] = None,
+        tol: float = 0.0,
+        verbose: int = 0,
+        batch_size: int = 128,
+    ) -> T:
+        """Build Topic Context Model with Latent semantic analysis (TruncatedSVD).
+
+        https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html
+        """
+        assert algorithm in ["arpack", "randomized"]
+        assert power_iteration_normalizer in ["auto", "QR", "LU", "none"]
+
+        return cls(
+            TruncatedSVD(
+                n_components=n_components,
+                algorithm=algorithm,
+                n_iter=n_iter,
+                n_oversamples=n_oversamples,
+                power_iteration_normalizer=power_iteration_normalizer,
+                random_state=random_state,
+                tol=tol,
+            ),
+            verbose=verbose,
+            batch_size=batch_size,
+        )
+
+    @classmethod
     def load(cls: Type[T], path: str | Path) -> T:
         """Load a Topic Context Model from a file.
 
@@ -733,6 +767,58 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="pass an int for reproducible results across multiple function calls.",
+    )
+
+    # lsa
+    lsa_parser = subparsers.add_parser("lsa", help="use LSA as model for TCM.")
+    lsa_parser.add_argument(
+        "--n-components",
+        type=int,
+        default=100,
+        help="desired dimensionality of output data. If algorithm='arpack', must be "
+        + "strictly less than the number of features. If algorithm='randomized', must "
+        + "be less than or equal to the number of features.",
+    )
+    lsa_parser.add_argument(
+        "--algorithm",
+        type=str,
+        choices=["arpack", "randomized"],
+        default="randomized",
+        help="SVD solver to use. Either “arpack” for the ARPACK wrapper in SciPy, or "
+        + "'randomized' for the randomized algorithm due to Halko (2009).",
+    )
+    lsa_parser.add_argument(
+        "--n_iter",
+        type=int,
+        default=5,
+        help="number of iterations for randomized SVD solver. Not used by ARPACK.",
+    )
+    lsa_parser.add_argument(
+        "--n-oversamples",
+        type=int,
+        default=10,
+        help="number of oversamples for randomized SVD solver. Not used by ARPACK.",
+    )
+    lsa_parser.add_argument(
+        "--power-iteration-normalizer",
+        type=str,
+        choices=["auto", "QR", "LU", "none"],
+        default="auto",
+        help="power iteration normalizer for randomized SVD solver. Not used by ARPACK.",
+    )
+    lsa_parser.add_argument(
+        "--random-state",
+        type=int,
+        default=None,
+        help="used during randomized SVD. Pass an int for reproducible results across "
+        + "multiple function calls.",
+    )
+    lsa_parser.add_argument(
+        "--tol",
+        type=float,
+        default=0.0,
+        help="tolerance for ARPACK. 0 means machine precision. Ignored by randomized "
+        + "SVD solver.",
     )
 
     # logging
