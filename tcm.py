@@ -170,7 +170,15 @@ class TopicContextModel:
         Returns:
          * a Topic Context Model
         """
-        return joblib.load(path)
+        model = joblib.load(path)
+        if isinstance(model, LatentDirichletAllocation) or isinstance(
+            model, TruncatedSVD
+        ):
+            return cls(model)
+        elif isinstance(model, cls):
+            return model
+        else:
+            raise RuntimeError(f"Unkown model loaded from {path}.")
 
     def fit(self, data: csr_matrix) -> None:
         """Train Topic Context Model in the given data.
@@ -196,18 +204,32 @@ class TopicContextModel:
             data = []
             indices = []
             total = doc.sum()
-            tdata = self.model.transform(doc).squeeze()
+            tdata = np.atleast_1d(self.model.transform(doc).squeeze())
+            print(tdata, tdata[0])
             doc = doc.toarray().squeeze()
             for i in np.nonzero(doc)[0]:
-                data.append(
-                    (-1.0 / self.model.n_components)
-                    * sum(
-                        [
-                            math.log2((doc[i] / total) * topics_words[t, i] * tdata[t])
-                            for t in range(self.model.n_components)
-                        ]
+                if isinstance(self.model, LatentDirichletAllocation):
+                    data.append(
+                        (-1.0 / self.model.n_components)
+                        * sum(
+                            [
+                                math.log2(
+                                    (doc[i] / total) * topics_words[t, i] * tdata[t]
+                                )
+                                for t in range(self.model.n_components)
+                            ]
+                        )
                     )
-                )
+                elif isinstance(self.model, TruncatedSVD):
+                    data.append(
+                        (-1.0 / self.model.n_components)
+                        * sum(
+                            [
+                                math.log2((doc[i] / total) * tdata[t])
+                                for t in range(self.model.n_components)
+                            ]
+                        )
+                    )
                 indices.append(i)
             return data, indices
 
@@ -804,7 +826,8 @@ if __name__ == "__main__":
         type=str,
         choices=["auto", "QR", "LU", "none"],
         default="auto",
-        help="power iteration normalizer for randomized SVD solver. Not used by ARPACK.",
+        help="power iteration normalizer for randomized SVD solver. Not used by "
+        + "ARPACK.",
     )
     lsa_parser.add_argument(
         "--random-state",
@@ -819,6 +842,12 @@ if __name__ == "__main__":
         default=0.0,
         help="tolerance for ARPACK. 0 means machine precision. Ignored by randomized "
         + "SVD solver.",
+    )
+    lsa_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=128,
+        help="used in joblib paralisation.",
     )
 
     # logging
@@ -919,6 +948,18 @@ if __name__ == "__main__":
             args.n_jobs,
             verbosity,
             args.random_state,
+        )
+    elif args.model == "lsa":
+        tcm = TopicContextModel.LatentSemanticAnalysis(
+            args.n_components,
+            args.algorithm,
+            args.n_iter,
+            args.n_oversamples,
+            args.power_iteration_normalizer,
+            args.random_state,
+            args.tol,
+            verbosity,
+            args.batch_size,
         )
 
     if "train" in args.action:
