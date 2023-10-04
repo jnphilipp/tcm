@@ -204,8 +204,15 @@ class TopicContextModel:
             data = []
             indices = []
             total = doc.sum()
-            tdata = np.atleast_1d(self.model.transform(doc).squeeze())
-            print(tdata, tdata[0])
+
+            n_features = topics_words.shape[1]
+            if doc.shape[1] != n_features:
+                x = doc.copy()
+                doc.resize((doc.shape[0], n_features))
+            else:
+                x = doc
+            tdata = np.atleast_1d(self.model.transform(x).squeeze())
+
             doc = doc.toarray().squeeze()
             for i in np.nonzero(doc)[0]:
                 if isinstance(self.model, LatentDirichletAllocation):
@@ -214,7 +221,13 @@ class TopicContextModel:
                         * sum(
                             [
                                 math.log2(
-                                    (doc[i] / total) * topics_words[t, i] * tdata[t]
+                                    (doc[i] / total)
+                                    * (
+                                        topics_words[t, i]
+                                        if i < n_features
+                                        else topics_words[t].mean()
+                                    )
+                                    * tdata[t]
                                 )
                                 for t in range(self.model.n_components)
                             ]
@@ -222,12 +235,15 @@ class TopicContextModel:
                     )
                 elif isinstance(self.model, TruncatedSVD):
                     data.append(
-                        (-1.0 / self.model.n_components)
-                        * sum(
-                            [
-                                math.log2((doc[i] / total) * tdata[t])
-                                for t in range(self.model.n_components)
-                            ]
+                        -1.0
+                        * math.log2(
+                            (doc[i] / total)
+                            * (
+                                topics_words[0, i]
+                                if i < n_features
+                                else topics_words[0].mean()
+                            )
+                            * tdata[0]
                         )
                     )
                 indices.append(i)
@@ -238,6 +254,8 @@ class TopicContextModel:
                 self.model.components_
                 / self.model.components_.sum(axis=1)[:, np.newaxis]
             )
+        else:
+            topics_words = self.model.components_
 
         with Parallel(
             n_jobs=joblib.cpu_count(),
@@ -324,7 +342,7 @@ def data_load(
     file_as_text: bool = False,
     batch_size: int = 128,
     verbose: int = 10,
-) -> Tuple[csr_matrix, List[str]]:
+) -> Tuple[csr_matrix, List[str], List[str]]:
     """Load texts from text or csv files.
 
     Text files need to have a text per line, for csv files fields names need to be
@@ -354,7 +372,7 @@ def data_load(
             if words is None:
                 idx = vocab.setdefault(k, len(vocab))
             elif k not in vocab:
-                continue
+                idx = out_of_vocab.setdefault(k, len(vocab) + len(out_of_vocab))
             else:
                 idx = vocab[k]
             data.append(v)
@@ -372,6 +390,7 @@ def data_load(
 
     fopen: Callable
     vocab: Dict[str, int] = {} if words is None else {w: i for i, w in enumerate(words)}
+    out_of_vocab: Dict[str, int] = {}
     for c, path in enumerate(paths):
         if isinstance(path, str):
             path = Path(path)
@@ -429,6 +448,7 @@ def data_load(
         [k for k, v in sorted(vocab.items(), key=lambda x: x[1])]
         if words is None
         else words,
+        [k for k, v in sorted(out_of_vocab.items(), key=lambda x: x[1])],
     )
 
 
@@ -635,7 +655,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-file",
         type=lambda p: Path(p).absolute(),
-        default="lda.jl.z",
+        default="tcm.jl.z",
         help="file to load model from or save to, if path exists tries to load model.",
     )
     parser.add_argument(
@@ -796,7 +816,7 @@ if __name__ == "__main__":
     lsa_parser.add_argument(
         "--n-components",
         type=int,
-        default=100,
+        default=2,
         help="desired dimensionality of output data. If algorithm='arpack', must be "
         + "strictly less than the number of features. If algorithm='randomized', must "
         + "be less than or equal to the number of features.",
@@ -916,7 +936,7 @@ if __name__ == "__main__":
         handlers=handlers,
     )
 
-    data, words = data_load(
+    data, words, out_of_vocab = data_load(
         args.data,
         args.fields,
         words_load(args.words) if args.words.exists() else None,
@@ -963,7 +983,12 @@ if __name__ == "__main__":
         )
 
     if "train" in args.action:
-        tcm.fit(data)
+        if data.shape[1] == len(words):
+            x = data
+        else:
+            x = data.copy()
+            x.resize((data.shape[0], len(words)))
+        tcm.fit(x)
         tcm.save(args.model_file)
     if "surprisal" in args.action:
         surprisal_data = tcm.surprisal(data)
