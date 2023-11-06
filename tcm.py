@@ -74,12 +74,14 @@ class TopicContextModel:
     T = TypeVar("T", bound="TopicContextModel")
 
     model: LatentDirichletAllocation | TruncatedSVD
+    words: Optional[List[str]] = None
     verbose: int = 0
     batch_size: int = 128
 
     @classmethod
     def LatentDirichletAllocation(  # noqa: N802
         cls: Type[T],
+        words: List[str],
         n_components: int = 10,
         doc_topic_prior: Optional[float] = None,
         topic_word_prior: Optional[float] = None,
@@ -122,6 +124,7 @@ class TopicContextModel:
                 verbose=verbose,
                 random_state=random_state,
             ),
+            words=words,
             verbose=verbose,
             batch_size=batch_size,
         )
@@ -129,6 +132,7 @@ class TopicContextModel:
     @classmethod
     def LatentSemanticAnalysis(  # noqa: N802
         cls: Type[T],
+        words: List[str],
         n_components: int = 2,
         algorithm: str = "randomized",
         n_iter: int = 5,
@@ -208,7 +212,7 @@ class TopicContextModel:
             n_features = topics_words.shape[1]
             if doc.shape[1] != n_features:
                 x = doc.copy()
-                doc.resize((doc.shape[0], n_features))
+                x.resize((doc.shape[0], n_features))
             else:
                 x = doc
             tdata = np.atleast_1d(self.model.transform(x).squeeze())
@@ -273,7 +277,9 @@ class TopicContextModel:
                 indices += j
                 indptr.append(len(indices))
 
-        return csr_matrix((surprisal_data, indices, indptr))
+        return csr_matrix(
+            (surprisal_data, indices, indptr), shape=data.shape, dtype=float
+        )
 
 
 def words_load(path: Path) -> List[str]:
@@ -342,7 +348,7 @@ def data_load(
     file_as_text: bool = False,
     batch_size: int = 128,
     verbose: int = 10,
-) -> Tuple[csr_matrix, List[str], List[str]]:
+) -> Tuple[csr_matrix, List[str], Dict[int, str]]:
     """Load texts from text or csv files.
 
     Text files need to have a text per line, for csv files fields names need to be
@@ -441,14 +447,18 @@ def data_load(
             indptr = indptr[: c + 1]
             indptr.append(len(indices))
     logging.info(f"Loaded {len(indptr) - 1} texts with {len(vocab)} words.")
+    if len(out_of_vocab) > 0:
+        logging.info(f"Found {len(out_of_vocab)} out of vocab words.")
     return (
         csr_matrix(
-            (data, indices, indptr), shape=(len(indptr) - 1, len(vocab)), dtype=np.uint
+            (data, indices, indptr),
+            shape=(len(indptr) - 1, len(vocab) + len(out_of_vocab)),
+            dtype=np.uint,
         ),
         [k for k, v in sorted(vocab.items(), key=lambda x: x[1])]
         if words is None
         else words,
-        [k for k, v in sorted(out_of_vocab.items(), key=lambda x: x[1])],
+        {v: k for k, v in sorted(out_of_vocab.items(), key=lambda x: x[1])},
     )
 
 
@@ -457,6 +467,7 @@ def surprisal_save(
     fields: Optional[str | List[str]],
     surprisal_data: csr_matrix,
     words: List[str],
+    out_of_vocab: Dict[int, str],
     surprisal_file_name_part: str = "-surprisal",
     file_as_text: bool = False,
     tokenizer: Optional[Callable[[str], List[str]]] = None,
@@ -476,6 +487,8 @@ def surprisal_save(
         paths = [paths]
 
     rwords = {w: i for i, w in enumerate(words)}
+    for k, v in out_of_vocab.items():
+        rwords[v] = k
 
     fopen: Callable
     idx = 0
@@ -519,7 +532,7 @@ def surprisal_save(
                             if tokenizer is not None:
                                 row[f"{field}-surprisal"] = ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
+                                        f"{w}|{doc[rwords[w]]}"
                                         for w in tokenizer(row[field].strip())
                                     ]
                                 )
@@ -529,8 +542,6 @@ def surprisal_save(
                                         ",".join(
                                             [
                                                 f"{w}|{doc[rwords[w]]}"
-                                                if w in rwords
-                                                else w
                                                 for w in s.split(",")
                                             ]
                                         )
@@ -540,7 +551,7 @@ def surprisal_save(
                             elif "," in row[field]:
                                 row[f"{field}-surprisal"] = ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
+                                        f"{w}|{doc[rwords[w]]}"
                                         for w in row[field].strip().split(",")
                                     ]
                                 )
@@ -567,7 +578,7 @@ def surprisal_save(
                             fw.write(
                                 ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
+                                        f"{w}|{doc[rwords[w]]}"
                                         for w in tokenizer(line.strip())
                                     ]
                                 )
@@ -582,8 +593,6 @@ def surprisal_save(
                                         ",".join(
                                             [
                                                 f"{w}|{doc[rwords[w]]}"
-                                                if w in rwords
-                                                else w
                                                 for w in s.split(",")
                                             ]
                                         )
@@ -598,7 +607,7 @@ def surprisal_save(
                             fw.write(
                                 ",".join(
                                     [
-                                        f"{w}|{doc[rwords[w]]}" if w in rwords else w
+                                        f"{w}|{doc[rwords[w]]}"
                                         for w in line.strip().split(",")
                                     ]
                                 )
@@ -678,13 +687,6 @@ if __name__ == "__main__":
         nargs="+",
         type=str,
         help="field(s) to load texts from, when using csv data.",
-    )
-    parser.add_argument(
-        "--words",
-        type=lambda p: Path(p).absolute(),
-        default="words.txt.gz",
-        help="file to load words from and/or save to, either txt or json optionally "
-        + "gzip compressed.",
     )
     parser.add_argument(
         "-t",
@@ -936,22 +938,20 @@ if __name__ == "__main__":
         handlers=handlers,
     )
 
+    tcm = TopicContextModel.load(args.model_file) if args.model_file.exists() else None
     data, words, out_of_vocab = data_load(
         args.data,
         args.fields,
-        words_load(args.words) if args.words.exists() else None,
+        None if tcm is None else tcm.words,
         default_tokenizer if args.tokenize else None,
         args.file_as_text,
         args.batch_size,
         verbose=verbosity,
     )
-    if not args.words.exists():
-        words_save(args.words, words)
 
-    if args.model_file.exists():
-        tcm = TopicContextModel.load(args.model_file)
-    elif args.model == "lda":
+    if tcm is None and args.model == "lda":
         tcm = TopicContextModel.LatentDirichletAllocation(
+            words,
             args.n_components,
             args.doc_topic_prior,
             args.topic_word_prior,
@@ -969,8 +969,9 @@ if __name__ == "__main__":
             verbosity,
             args.random_state,
         )
-    elif args.model == "lsa":
+    elif tcm is None and args.model == "lsa":
         tcm = TopicContextModel.LatentSemanticAnalysis(
+            words,
             args.n_components,
             args.algorithm,
             args.n_iter,
@@ -981,6 +982,8 @@ if __name__ == "__main__":
             verbosity,
             args.batch_size,
         )
+    elif tcm is None:
+        raise RuntimeError("No TCM was created.")
 
     if "train" in args.action:
         if data.shape[1] == len(words):
@@ -997,6 +1000,7 @@ if __name__ == "__main__":
             args.fields,
             surprisal_data,
             words,
+            out_of_vocab,
             args.surprisal_file_name_part,
             args.file_as_text,
         )
