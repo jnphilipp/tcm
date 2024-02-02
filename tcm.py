@@ -199,6 +199,7 @@ class TopicContextModel:
     def surprisal(
         self,
         data: csr_matrix,
+        include_frequency: bool = False,
         verbose: int = 0,
         batch_size: int = 128,
     ) -> csr_matrix:
@@ -225,7 +226,7 @@ class TopicContextModel:
                         * sum(
                             [
                                 math.log2(
-                                    (doc[i] / total)
+                                    ((doc[i] / total) if include_frequency else 1.0)
                                     * (
                                         topics_words[t, i]
                                         if i < n_features
@@ -455,9 +456,11 @@ def data_load(
             shape=(len(indptr) - 1, len(vocab) + len(out_of_vocab)),
             dtype=np.uint,
         ),
-        [k for k, v in sorted(vocab.items(), key=lambda x: x[1])]
-        if words is None
-        else words,
+        (
+            [k for k, v in sorted(vocab.items(), key=lambda x: x[1])]
+            if words is None
+            else words
+        ),
         {v: k for k, v in sorted(out_of_vocab.items(), key=lambda x: x[1])},
     )
 
