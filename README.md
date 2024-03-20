@@ -2,10 +2,12 @@
 
 Calculates the surprisal of a word given a context.
 
+![Tests](https://github.com/jnphilipp/tcm/actions/workflows/tests.yml/badge.svg)
 
 ## Requirements
 
 * Python >= 3.10
+* scipy
 * scikit-learn
 
 ## Usage
