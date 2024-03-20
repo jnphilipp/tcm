@@ -1,4 +1,6 @@
 build/
+dist/
+tcm.egg-info/
 
 # Python
 __pycache__/

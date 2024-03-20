@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "tcm"
+version = "0.1.1"
+authors = [
+    {name = "J. Nathanael Philipp", email = "nathanael@philipp.land"}
+]
+description="Topic Context Model (TCM)."
+readme = "README.md"
+license = {text = "GPLv3+"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dynamic = ["dependencies"]
+keywords = ["tcm", "lda", "lsa"]
+
+
+[project.urls]
+"Homepage" = "https://github.com/jnphilipp/tcm"
+"Bug Tracker" = "http://github.com/jnphilipp/tcm/issues"
+
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project.scripts]
+tcm = "tcm:app.main"
