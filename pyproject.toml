@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "tcm"
+name = "topic-context-model"
 version = "0.1.1"
 authors = [
     {name = "J. Nathanael Philipp", email = "nathanael@philipp.land"}
@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 dynamic = ["dependencies"]
-keywords = ["tcm", "lda", "lsa"]
+keywords = ["topic context model", "tcm", "lda", "lsa"]
 
 
 [project.urls]
