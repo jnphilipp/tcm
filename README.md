@@ -3,6 +3,7 @@
 Calculates the surprisal of a word given a context.
 
 ![Tests](https://github.com/jnphilipp/tcm/actions/workflows/tests.yml/badge.svg)
+[![pypi Version](https://img.shields.io/pypi/v/topic-context-model.svg?logo=pypi&logoColor=white)](https://pypi.org/project/topic-context-model/)
 
 ## Requirements
 
