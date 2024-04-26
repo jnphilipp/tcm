@@ -27,7 +27,7 @@ from argparse import (
 from pathlib import Path
 
 from . import __app_name__, VERSION
-from .data import data_load, surprisal_save
+from .data import load, save
 from .model import TopicContextModel
 from .tokenizer import default_tokenizer
 
@@ -334,7 +334,7 @@ def main() -> str | None:
     )
 
     tcm = TopicContextModel.load(args.model_file) if args.model_file.exists() else None
-    data, words, out_of_vocab = data_load(
+    data, words, out_of_vocab = load(
         args.data,
         args.fields,
         None if tcm is None else tcm.words,
@@ -390,7 +390,7 @@ def main() -> str | None:
         tcm.save(args.model_file)
     if "surprisal" in args.action:
         surprisal_data = tcm.surprisal(data)
-        surprisal_save(
+        save(
             args.data,
             args.fields,
             surprisal_data,

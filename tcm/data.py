@@ -23,6 +23,7 @@ import numpy as np
 import re
 
 from collections import Counter
+from conllu import parse_incr, TokenList
 from csv import DictReader, DictWriter, Sniffer
 from joblib import Parallel, delayed
 from scipy.sparse import csr_matrix
@@ -30,40 +31,55 @@ from pathlib import Path
 from typing import Callable
 
 
-def data_load(
+def load(
     paths: str | Path | list[str | Path],
     fields: str | list[str] | None,
     words: list[str] | None = None,
     tokenizer: Callable[[str], list[str]] | None = None,
     file_as_text: bool = False,
     batch_size: int = 128,
+    exclude_pos_tags: list[str] = [],
     verbose: int = 10,
 ) -> tuple[csr_matrix, list[str], dict[int, str]]:
-    """Load texts from text or csv files.
+    """Load texts from text, csv or CoNLL-U files.
 
     Text files need to have a text per line, for csv files fields names need to be
     given. The text needs to betokenized with `;` for senteces and `,` for words.
 
+    For CoNLL-U files the lemma will be used, optionally a list of PoS-tags can be given
+    that will be exclude, the fields for UPOS and XPOS will be checked.
+
     paths: path or list of paths to load texts from
     fields: if files are in csv format, which field to use
+    words: optional list of words (vocab). If given words not in this list will be
+           excluded.
     """
 
-    def convert_line(*texts: str) -> tuple[list[int], list[int]]:
+    def convert(*texts: str | TokenList) -> tuple[list[int], list[int]]:
         data = []
         indices = []
         counter: Counter = Counter()
         for text in texts:
-            if re.fullmatch(r"[^\s]+\t+[^\t]+", text.strip()):
-                idx, text = re.split(r"\t+", text.strip())
-            if tokenizer is not None:
-                counter.update(tokenizer(text.strip()))
-            elif ";" in text and "," in text:
-                for s in text.strip().split(";"):
-                    counter.update(s.split(","))
-            elif "," in text:
-                counter.update(text.strip().split(","))
-            else:
-                raise RuntimeError(f"Unrecognized format for line {text}.")
+            if isinstance(text, str):
+                if re.fullmatch(r"[^\s]+\t+[^\t]+", text.strip()):
+                    idx, text = re.split(r"\t+", text.strip())
+                if tokenizer is not None:
+                    counter.update(tokenizer(text.strip()))
+                elif ";" in text and "," in text:
+                    for s in text.strip().split(";"):
+                        counter.update(s.split(","))
+                elif "," in text:
+                    counter.update(text.strip().split(","))
+                else:
+                    raise RuntimeError(f"Unrecognized format for line {text}.")
+            elif isinstance(text, TokenList):
+                for token in text:
+                    if (
+                        token["upos"] in exclude_pos_tags
+                        or token["xpos"] in exclude_pos_tags
+                    ):
+                        continue
+                    counter.update([token["lemma"]])
         for k, v in counter.items():
             if words is None:
                 idx = vocab.setdefault(k, len(vocab))
@@ -93,12 +109,25 @@ def data_load(
         logging.info(f"Load data from {path}.")
         if path.name.endswith(".gz"):
             fopen = gzip.open
-        elif path.name.endswith((".txt", ".csv")):
+        elif path.name.endswith((".txt", ".csv", ".conllu")):
             fopen = open
         else:
             raise RuntimeError("Unsopported file type.")
         with fopen(path, "rt", encoding="utf8") as f:
-            if path.name.endswith((".csv", ".csv.gz")):
+            if path.name.endswith((".conllu", ".conllu.gz")):
+                with Parallel(
+                    n_jobs=joblib.cpu_count(),
+                    verbose=verbose,
+                    require="sharedmem",
+                    batch_size=batch_size,
+                ) as parallel:
+                    for i, j in parallel(
+                        [delayed(convert)(tokenlist) for tokenlist in parse_incr(f)]
+                    ):
+                        data += i
+                        indices += j
+                        indptr.append(len(indices))
+            elif path.name.endswith((".csv", ".csv.gz")):
                 assert fields is not None
                 dialect = Sniffer().sniff(f.readline() + f.readline())
                 f.seek(0)
@@ -111,7 +140,7 @@ def data_load(
                 ) as parallel:
                     for i, j in parallel(
                         [
-                            delayed(convert_line)(*(row[field] for field in fields))
+                            delayed(convert)(*(row[field] for field in fields))
                             for row in reader
                         ]
                     ):
@@ -126,7 +155,7 @@ def data_load(
                     batch_size=batch_size,
                 ) as parallel:
                     for i, j in parallel(
-                        [delayed(convert_line)(line.strip()) for line in f]
+                        [delayed(convert)(line.strip()) for line in f]
                     ):
                         data += i
                         indices += j
@@ -154,7 +183,7 @@ def data_load(
     )
 
 
-def surprisal_save(
+def save(
     paths: str | Path | list[str | Path],
     fields: str | list[str] | None,
     surprisal_data: csr_matrix,
@@ -163,6 +192,7 @@ def surprisal_save(
     surprisal_file_name_part: str = "-surprisal",
     file_as_text: bool = False,
     tokenizer: Callable[[str], list[str]] | None = None,
+    exclude_pos_tags: list[str] = [],
 ) -> None:
     """Save surprisal values.
 
@@ -188,14 +218,14 @@ def surprisal_save(
         if isinstance(path, str):
             path = Path(path)
         out_path = path.parent / re.sub(
-            r"(.+?)(\.(txt|.csv)(\.gz)?)$",
+            r"(.+?)(\.(txt|csv|conllu)(\.gz)?)$",
             rf"\g<1>{surprisal_file_name_part}\g<2>",
             path.name,
         )
 
         if path.name.endswith(".gz"):
             fopen = gzip.open
-        elif path.name.endswith((".txt", ".csv")):
+        elif path.name.endswith((".txt", ".csv", ".conllu")):
             fopen = open
         else:
             raise RuntimeError("Unsopported file type.")
@@ -206,7 +236,28 @@ def surprisal_save(
 
             with fopen(out_path, "wt", encoding="utf8") as fw:
                 logging.info(f"Save surprisal data for {path} in {out_path}.")
-                if path.name.endswith((".csv", ".csv.gz")):
+                if path.name.endswith((".conllu", ".conllu.gz")):
+                    for tokenlist in parse_incr(fr):
+                        if not file_as_text:
+                            doc = surprisal_data.getrow(idx).toarray().squeeze()
+                            idx += 1
+                        for token in tokenlist:
+                            if (
+                                token["upos"] in exclude_pos_tags
+                                or token["xpos"] in exclude_pos_tags
+                            ):
+                                continue
+                            if token["lemma"] in rwords:
+                                if "misc" in token and token["misc"]:
+                                    token["misc"]["surprisal"] = doc[
+                                        rwords[token["lemma"]]
+                                    ]
+                                else:
+                                    token["misc"] = {
+                                        "surprisal": doc[rwords[token["lemma"]]]
+                                    }
+                        fw.write(tokenlist.serialize())
+                elif path.name.endswith((".csv", ".csv.gz")):
                     assert fields is not None
                     dialect = Sniffer().sniff(fr.readline() + fr.readline())
                     fr.seek(0)
