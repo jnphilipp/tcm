@@ -193,6 +193,7 @@ def save(
     file_as_text: bool = False,
     tokenizer: Callable[[str], list[str]] | None = None,
     exclude_pos_tags: list[str] = [],
+    conllu_keyname: str = "surprisal",
 ) -> None:
     """Save surprisal values.
 
@@ -201,9 +202,12 @@ def save(
      * fields:
      * surprisal_data:
      * words:
+     * out_of_vocab:
      * surprisal_file_name_part:
      * file_as_text:
      * tokenizer:
+     * exclude_pos_tags:
+     * conllu_keyname:
     """
     if isinstance(paths, str) or isinstance(paths, Path):
         paths = [paths]
@@ -249,12 +253,12 @@ def save(
                                 continue
                             if token["lemma"] in rwords:
                                 if "misc" in token and token["misc"]:
-                                    token["misc"]["surprisal"] = doc[
+                                    token["misc"][conllu_keyname] = doc[
                                         rwords[token["lemma"]]
                                     ]
                                 else:
                                     token["misc"] = {
-                                        "surprisal": doc[rwords[token["lemma"]]]
+                                        conllu_keyname: doc[rwords[token["lemma"]]]
                                     }
                         fw.write(tokenlist.serialize())
                 elif path.name.endswith((".csv", ".csv.gz")):
