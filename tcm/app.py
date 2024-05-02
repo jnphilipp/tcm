@@ -101,6 +101,18 @@ def main() -> str | None:
         default="-surprisal",
         help="added to the name of input file to when saving surprisal data.",
     )
+    parser.add_argument(
+        "--exclude-pos-tags",
+        nargs="+",
+        default=[],
+        help="exclude words with these PoS-tags.",
+    )
+    parser.add_argument(
+        "--conllu-keyname",
+        type=str,
+        default="surprisal",
+        help="key name to use when saving to CoNLL-U, in misc.",
+    )
 
     # lda
     subparsers = parser.add_subparsers(
@@ -341,7 +353,8 @@ def main() -> str | None:
         default_tokenizer if args.tokenize else None,
         args.file_as_text,
         args.batch_size,
-        verbose=verbosity,
+        args.exclude_pos_tags,
+        verbosity,
     )
 
     if tcm is None and args.model == "lda":
@@ -398,5 +411,8 @@ def main() -> str | None:
             out_of_vocab,
             args.surprisal_file_name_part,
             args.file_as_text,
+            default_tokenizer if args.tokenize else None,
+            args.exclude_pos_tags,
+            args.conllu_keyname,
         )
     return None
