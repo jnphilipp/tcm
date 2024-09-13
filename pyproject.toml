@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topic-context-model"
-version = "0.1.4"
+version = "0.1.5"
 authors = [
     {name = "J. Nathanael Philipp", email = "nathanael@philipp.land"}
 ]
@@ -40,7 +40,7 @@ keywords = ["topic context model", "tcm", "lda", "lsa"]
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.package-data]
-topic-context-model = ["py.typed"]
+"*" = ["py.typed"]
 
 [project.scripts]
 tcm = "tcm:app.main"
