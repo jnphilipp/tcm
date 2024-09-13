@@ -39,5 +39,8 @@ keywords = ["topic context model", "tcm", "lda", "lsa"]
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
+[tool.setuptools.package-data]
+topic-context-model = ["py.typed"]
+
 [project.scripts]
 tcm = "tcm:app.main"
