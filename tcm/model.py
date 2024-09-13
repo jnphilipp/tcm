@@ -170,7 +170,8 @@ class TopicContextModel:
     ) -> csr_matrix:
         """Calculate the surprisal."""
 
-        def surprisal(doc: csr_matrix) -> tuple[list[int], list[int]]:
+        def surprisal(doc: csr_matrix, stype: str) -> tuple[list[int], list[int]]:
+            assert stype in ["lda", "lsa"]
             data = []
             indices = []
             total = doc.sum()
@@ -185,7 +186,7 @@ class TopicContextModel:
 
             doc = doc.toarray().squeeze()
             for i in np.nonzero(doc)[0]:
-                if isinstance(self.model, LatentDirichletAllocation):
+                if stype == "lda":
                     data.append(
                         (-1.0 / self.model.n_components)
                         * sum(
@@ -203,7 +204,7 @@ class TopicContextModel:
                             ]
                         )
                     )
-                elif isinstance(self.model, TruncatedSVD):
+                elif stype == "lsa":
                     data.append(
                         -1.0
                         * math.log2(
@@ -219,25 +220,30 @@ class TopicContextModel:
                 indices.append(i)
             return data, indices
 
+        stype = None
         if isinstance(self.model, LatentDirichletAllocation):
+            stype = "lda"
             topics_words = (
                 self.model.components_
                 / self.model.components_.sum(axis=1)[:, np.newaxis]
             )
-        else:
+        elif isinstance(self.model, TruncatedSVD):
+            stype = "lsa"
             topics_words = self.model.components_
 
         with Parallel(
-            n_jobs=joblib.cpu_count(),
+            n_jobs=-2,
             verbose=verbose,
-            require="sharedmem",
             batch_size=batch_size,
         ) as parallel:
             surprisal_data = []
             indices = []
             indptr = [0]
             for i, j in parallel(
-                [delayed(surprisal)(data.getrow(i)) for i in range(data.shape[0])]
+                [
+                    delayed(surprisal)(data.getrow(i), stype)
+                    for i in range(data.shape[0])
+                ]
             ):
                 surprisal_data += i
                 indices += j
