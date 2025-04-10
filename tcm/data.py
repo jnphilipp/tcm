@@ -39,6 +39,7 @@ def load(
     file_as_text: bool = False,
     batch_size: int = 128,
     exclude_pos_tags: list[str] = [],
+    n_jobs: int = joblib.cpu_count(),
     verbose: int = 10,
 ) -> tuple[csr_matrix, list[str], dict[int, str]]:
     """Load texts from text, csv or CoNLL-U files.
@@ -53,6 +54,12 @@ def load(
     fields: if files are in csv format, which field to use
     words: optional list of words (vocab). If given words not in this list will be
            excluded.
+    tokenizer: `Callable`, default `None`
+    file_as_text: `bool`, default `False`
+    batch_size: `int`, default 128
+    exclude_pos_tags: `list`, default empty list
+    n_jobs: `int`, default `joblib.cpu_count()`
+    verbose: `int`, default 10
     """
 
     def convert(*texts: str | TokenList) -> tuple[list[int], list[int]]:
@@ -116,7 +123,7 @@ def load(
         with fopen(path, "rt", encoding="utf8") as f:
             if path.name.endswith((".conllu", ".conllu.gz")):
                 with Parallel(
-                    n_jobs=joblib.cpu_count(),
+                    n_jobs=n_jobs,
                     verbose=verbose,
                     require="sharedmem",
                     batch_size=batch_size,
@@ -133,7 +140,7 @@ def load(
                 f.seek(0)
                 reader = DictReader(f, dialect=dialect)
                 with Parallel(
-                    n_jobs=joblib.cpu_count(),
+                    n_jobs=n_jobs,
                     verbose=verbose,
                     require="sharedmem",
                     batch_size=batch_size,
@@ -149,7 +156,7 @@ def load(
                         indptr.append(len(indices))
             elif path.name.endswith((".txt", ".txt.gz")):
                 with Parallel(
-                    n_jobs=joblib.cpu_count(),
+                    n_jobs=n_jobs,
                     verbose=verbose,
                     require="sharedmem",
                     batch_size=batch_size,
@@ -194,6 +201,7 @@ def save(
     tokenizer: Callable[[str], list[str]] | None = None,
     exclude_pos_tags: list[str] = [],
     conllu_keyname: str = "surprisal",
+    n_jobs: int = joblib.cpu_count(),
 ) -> None:
     """Save surprisal values.
 
@@ -208,6 +216,7 @@ def save(
      * tokenizer:
      * exclude_pos_tags:
      * conllu_keyname:
+     * n_jobs:
     """
     if isinstance(paths, str) or isinstance(paths, Path):
         paths = [paths]
