@@ -165,15 +165,16 @@ class TopicContextModel:
         self,
         data: csr_matrix,
         include_frequency: bool = False,
+        topic_probability_threshold: float = 1.0,
         verbose: int = 0,
         batch_size: int = 128,
     ) -> csr_matrix:
         """Calculate the surprisal."""
 
-        def surprisal(doc: csr_matrix, stype: str) -> tuple[list[int], list[int]]:
+        def surprisal(doc: csr_matrix, stype: str) -> tuple[list[float], list[int]]:
             assert stype in ["lda", "lsa"]
-            data = []
-            indices = []
+            data: list[float] = []
+            indices: list[int] = []
             total = doc.sum()
 
             n_features = topics_words.shape[1]
@@ -183,12 +184,23 @@ class TopicContextModel:
             else:
                 x = doc
             tdata = np.atleast_1d(self.model.transform(x).squeeze())
+            topics_to_use: list[int] = []
+            for t in reversed(tdata.argsort()):
+                if (
+                    sum([tdata[i] for i in topics_to_use], tdata[t])
+                    >= topic_probability_threshold
+                ):
+                    if len(topics_to_use) == 0:
+                        topics_to_use.append(t)
+                    break
+                else:
+                    topics_to_use.append(t)
 
             doc = doc.toarray().squeeze()
             for i in np.nonzero(doc)[0]:
                 if stype == "lda":
                     data.append(
-                        (-1.0 / self.model.n_components)
+                        (-1.0 / len(topics_to_use))
                         * sum(
                             [
                                 math.log2(
@@ -201,6 +213,7 @@ class TopicContextModel:
                                     * tdata[t]
                                 )
                                 for t in range(self.model.n_components)
+                                if t in topics_to_use
                             ]
                         )
                     )
