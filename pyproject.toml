@@ -9,7 +9,7 @@ version = "0.1.5"
 authors = [
     {name = "J. Nathanael Philipp", email = "nathanael@philipp.land"}
 ]
-description="Topic Context Model (TCM)."
+description="The Topic Context Model (TCM) calculates the surprisal of a word given a context based on the topics in a text."
 readme = "README.md"
 license = {text = "GPLv3+"}
 requires-python = ">=3.10"
