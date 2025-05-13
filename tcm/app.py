@@ -68,6 +68,17 @@ def main() -> str | None:
         nargs="+",
         help="what to do, train lda/lsa or calculate surprisal.",
     )
+    parser.add_argument(
+        "--include-frequency",
+        action="store_true",
+        help="use word frequency in surprisal calculation.",
+    )
+    parser.add_argument(
+        "--topic-probability-threshold",
+        type=float,
+        default=1.0,
+        help="threshold to limit which topics should be used in surprisal calculation.",
+    )
 
     # data
     parser.add_argument(
@@ -402,7 +413,9 @@ def main() -> str | None:
         tcm.fit(x)
         tcm.save(args.model_file)
     if "surprisal" in args.action:
-        surprisal_data = tcm.surprisal(data)
+        surprisal_data = tcm.surprisal(
+            data, args.include_frequency, args.topic_probability_threshold
+        )
         save(
             args.data,
             args.fields,
