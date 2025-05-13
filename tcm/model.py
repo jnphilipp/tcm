@@ -169,7 +169,15 @@ class TopicContextModel:
         verbose: int = 0,
         batch_size: int = 128,
     ) -> csr_matrix:
-        """Calculate the surprisal."""
+        """Calculate the surprisal.
+
+        Args:
+         * data: sparse document term matrix to calculate surprisal on
+         * include_frequency: include word frequency in calculation,
+         * topic_probability_threshold: topic probability threshold in calculation,
+         * verbose: verbosity level,
+         * batch_size: batch size,
+        """
 
         def surprisal(doc: csr_matrix, stype: str) -> tuple[list[float], list[int]]:
             assert stype in ["lda", "lsa"]
