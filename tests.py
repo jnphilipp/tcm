@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2023-2024 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
+# Copyright (C) 2023-2026 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
 #
 # This file is part of tcm.
 #
@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with tcm. If not, see <http://www.gnu.org/licenses/>
 """Tests for tcm."""
-
 
 import numpy as np
 import unittest
@@ -410,7 +409,6 @@ class TopicContextModelTests(unittest.TestCase):
 
     def test_tcm_lda(self) -> None:
         """Test encryption and decryption."""
-
         tcm = TopicContextModel.LatentDirichletAllocation(
             self.words,
             n_components=10,

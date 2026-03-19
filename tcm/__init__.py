@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
+# Copyright (C) 2023-2026 J. Nathanael Philipp (jnphilipp) <nathanael@philipp.land>
 #
 # Topic Context Model (TCM).
 #
@@ -25,7 +25,7 @@ __all__ = ["TopicContextModel"]
 __app_name__ = "tcm"
 __author__ = "J. Nathanael Philipp"
 __email__ = "nathanael@philipp.land"
-__copyright__ = "Copyright 2023-2024 J. Nathanael Philipp (jnphilipp)"
+__copyright__ = "Copyright 2023-2026 J. Nathanael Philipp (jnphilipp)"
 __license__ = "GPLv3"
 __version_info__ = (0, 1, 5)
 __version__ = ".".join(str(e) for e in __version_info__)
