@@ -363,7 +363,7 @@ def main() -> str | None:
         None if tcm is None else tcm.words,
         default_tokenizer if args.tokenize else None,
         args.file_as_text,
-        args.batch_size,
+        args.batch_size if tcm is None else tcm.batch_size,
         args.exclude_pos_tags,
         verbosity,
     )
