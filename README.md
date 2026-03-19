@@ -76,6 +76,26 @@ models:
     lda                 use LDA as model for TCM.
 ```
 
+## Surprisal calculation
+
+The TCM calculates the surprisal of words based on the formula:
+
+$$\overline{surprisal}(w_d) = -\phi\log_2\frac{c_d(w_d)}{|d|} - \frac{1}{|T_d|} \sum_{i\in T_d}\log_2 \left( P(t_i|d) f(w_d, t_i) \right)$$
+
+* $ c_d(w) $ is the frequency of a word $ w $ given a document $d$
+* $ |d| $ is the total number of words in the document $d$
+* $\phi\in\{0,1\}$ defines whether to use the word frequency
+* $T_d$ is the topic distribution $T$ of the document $d$, let it be indexed such that $P(t_i | d) \geq P(t_j | d)$ if and only if $i\leq j$.
+  Then pick a $\mu\in(0,1]$, also called threshold, and let $k_\mu$ be the largest integer such that $\sum_{i=1}^{k_\mu} P(t_i|d)\geq\mu$.
+  For $k_\mu=0$ we still require $T_d^\mu=\{1\}$ in order to keep the sets non-empty.
+* $|T_d|$ is the number of topics in $T_d$
+* $ P(t_i|d) $ the probability of a topic $ t_i $ in the document $d$
+
+$$f(w_d, t_i) = \begin{cases} WT_{w_d,t_i} & \text{ for } w \in WT \\ \overline{WT_{t_i}} & \text{ for } w \not\in WT$$
+
+* $WT$ is the normalised word topic distribution $WT\in\mathbb{R}^{|T|\times N}$ of the LDA, where $N$ is the number of words.
+
+
 ## References
 * [Max Kölbl, Yuki Kyogoku, J. Nathanael Philipp, Michael Richter, Tariq Yousef (2020) Keyword extraction in German: Information-theory vs. deep learning. ICAART 2020 Special Session NLPinAI, Volume: Vol. 1: 459 - 464. doi: 10.5220/0009374704590464](https://doi.org/10.5220/0009374704590464)
 * [Max Kölbl, Yuki Kyogoku, J. Nathanael Philipp, Michael Richter, Clemens Rietdorf, and Tariq Yousef (2021) The Semantic Level of Shannon Information: Are Highly Informative Words Good Keywords? A Study on German. Natural Language Processing in Artificial Intelligence - NLPinAI 2020 939 (2021): 139-161. doi: 10.1007/978-3-030-63787-3_5](https://doi.org/10.1007/978-3-030-63787-3_5)
