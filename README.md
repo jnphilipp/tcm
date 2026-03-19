@@ -91,7 +91,7 @@ $$\overline{surprisal}(w_d) = -\phi\log_2\frac{c_d(w_d)}{|d|} - \frac{1}{|T_d|} 
 * $|T_d|$ is the number of topics in $T_d$
 * $P(t_i|d)$ the probability of a topic $t_i$ in the document $d$
 
-$$f(w_d, t_i) = \begin{cases} WT_{w_d,t_i} & \text{ for } w \in WT \\ \overline{WT_{t_i}} & \text{ for } w \not\in WT\end{cases}$$
+$$f(w_d, t_i) = \begin{cases}WT_{w_d,t_i} & \text{ for } w \in WT \\ \overline{WT_{t_i}} & \text{ for } w \not\in WT\end{cases}$$
 
 * $WT$ is the normalised word topic distribution $WT\in\mathbb{R}^{|T|\times N}$ of the LDA, where $N$ is the number of words.
 
