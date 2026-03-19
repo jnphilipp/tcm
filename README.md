@@ -7,7 +7,7 @@ Calculates the surprisal of a word given a context based on the topics in a text
 
 ## Requirements
 
-* Python >= 3.10
+* Python >= 3.11
 * scipy
 * scikit-learn
 
@@ -42,10 +42,10 @@ usage: tcm [-h] [-V] [--model-file MODEL_FILE] [--data DATA [DATA ...]] [--field
            [--exclude-pos-tags EXCLUDE_POS_TAGS [EXCLUDE_POS_TAGS ...]]
            [--conllu-keyname CONLLU_KEYNAME] [-v] [--log-format LOG_FORMAT] [--log-file LOG_FILE]
            [--log-file-format LOG_FILE_FORMAT]
-           {train,surprisal} [{train,surprisal} ...] {lda,lsa} ...
+           {train,surprisal} [{train,surprisal} ...] {lda} ...
 
 positional arguments:
-  {train,surprisal}     what to do, train lda/lsa or calculate surprisal.
+  {train,surprisal}     what to do, train lda or calculate surprisal.
 
 options:
   -h, --help            show this help message and exit
@@ -74,7 +74,6 @@ options:
 models:
   {lda,lsa}             which model to use.
     lda                 use LDA as model for TCM.
-    lsa                 use LSA as model for TCM.
 ```
 
 ## References

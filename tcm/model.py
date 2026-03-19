@@ -91,41 +91,6 @@ class TopicContextModel:
         )
 
     @classmethod
-    def LatentSemanticAnalysis(  # noqa: N802
-        cls: type[T],
-        words: list[str],
-        n_components: int = 2,
-        algorithm: str = "randomized",
-        n_iter: int = 5,
-        n_oversamples: int = 10,
-        power_iteration_normalizer: str = "auto",
-        random_state: int | None = None,
-        tol: float = 0.0,
-        verbose: int = 0,
-        batch_size: int = 128,
-    ) -> T:
-        """Build Topic Context Model with Latent semantic analysis (TruncatedSVD).
-
-        https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html
-        """
-        assert algorithm in ["arpack", "randomized"]
-        assert power_iteration_normalizer in ["auto", "QR", "LU", "none"]
-
-        return cls(
-            TruncatedSVD(
-                n_components=n_components,
-                algorithm=algorithm,
-                n_iter=n_iter,
-                n_oversamples=n_oversamples,
-                power_iteration_normalizer=power_iteration_normalizer,
-                random_state=random_state,
-                tol=tol,
-            ),
-            verbose=verbose,
-            batch_size=batch_size,
-        )
-
-    @classmethod
     def load(cls: type[T], path: str | Path) -> T:
         """Load a Topic Context Model from a file.
 
@@ -136,9 +101,7 @@ class TopicContextModel:
          * a Topic Context Model
         """
         model = joblib.load(path)
-        if isinstance(model, LatentDirichletAllocation) or isinstance(
-            model, TruncatedSVD
-        ):
+        if isinstance(model, LatentDirichletAllocation):
             return cls(model)
         elif isinstance(model, cls):
             return model
@@ -180,7 +143,7 @@ class TopicContextModel:
         """
 
         def surprisal(doc: csr_matrix, stype: str) -> tuple[list[float], list[int]]:
-            assert stype in ["lda", "lsa"]
+            assert stype in ["lda"]
             data: list[float] = []
             indices: list[int] = []
             total = doc.sum()
@@ -225,19 +188,6 @@ class TopicContextModel:
                             ]
                         )
                     )
-                elif stype == "lsa":
-                    data.append(
-                        -1.0
-                        * math.log2(
-                            (doc[i] / total)
-                            * (
-                                topics_words[0, i]
-                                if i < n_features
-                                else topics_words[0].mean()
-                            )
-                            * tdata[0]
-                        )
-                    )
                 indices.append(i)
             return data, indices
 
@@ -248,9 +198,6 @@ class TopicContextModel:
                 self.model.components_
                 / self.model.components_.sum(axis=1)[:, np.newaxis]
             )
-        elif isinstance(self.model, TruncatedSVD):
-            stype = "lsa"
-            topics_words = self.model.components_
 
         with Parallel(
             n_jobs=-2,

@@ -418,17 +418,6 @@ class TopicContextModelTests(unittest.TestCase):
         surprisal_data = tcm.surprisal(self.data)
         self.assertEqual(surprisal_data.shape, (10, 152))
 
-    def test_tcm_lsa(self) -> None:
-        """Test encryption and decryption."""
-
-        tcm = TopicContextModel.LatentSemanticAnalysis(
-            self.words,
-            random_state=12345,
-        )
-        tcm.fit(self.data)
-        surprisal_data = tcm.surprisal(self.data)
-        self.assertEqual(surprisal_data.shape, (10, 152))
-
 
 if __name__ == "__main__":
     unittest.main()
