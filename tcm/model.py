@@ -129,6 +129,7 @@ class TopicContextModel:
         data: csr_matrix,
         include_frequency: bool = False,
         topic_probability_threshold: float = 1.0,
+        average_surprisal: bool = False,
         verbose: int = 0,
         batch_size: int = 128,
     ) -> csr_matrix:
@@ -141,6 +142,7 @@ class TopicContextModel:
          * verbose: verbosity level,
          * batch_size: batch size,
         """
+        assert self.words is None
 
         def surprisal(doc: csr_matrix, stype: str) -> tuple[list[float], list[int]]:
             assert stype in ["lda"]
@@ -170,24 +172,43 @@ class TopicContextModel:
             doc = doc.toarray().squeeze()
             for i in np.nonzero(doc)[0]:
                 if stype == "lda":
-                    data.append(
-                        (-1.0 / len(topics_to_use))
-                        * sum(
-                            [
-                                math.log2(
-                                    ((doc[i] / total) if include_frequency else 1.0)
-                                    * (
-                                        topics_words[t, i]
-                                        if i < n_features
-                                        else topics_words[t].mean()
+                    if average_surprisal:
+                        data.append(
+                            (-1.0 / len(topics_to_use))
+                            * sum(
+                                [
+                                    math.log2(
+                                        ((doc[i] / total) if include_frequency else 1.0)
+                                        * (
+                                            topics_words[t, i]
+                                            if i < n_features
+                                            else len(self.words)
+                                        )
+                                        * tdata[t]
                                     )
-                                    * tdata[t]
-                                )
-                                for t in range(self.model.n_components)
-                                if t in topics_to_use
-                            ]
+                                    for t in range(self.model.n_components)
+                                    if t in topics_to_use
+                                ]
+                            )
                         )
-                    )
+                    else:
+                        data.append(
+                            -1.0
+                            * math.log2(
+                                sum(
+                                    [
+                                        (
+                                            topics_words[t, i]
+                                            if i < n_features
+                                            else len(self.words)
+                                        )
+                                        * tdata[t]
+                                        for t in range(self.model.n_components)
+                                        if t in topics_to_use
+                                    ]
+                                )
+                            )
+                        )
                 indices.append(i)
             return data, indices
 
