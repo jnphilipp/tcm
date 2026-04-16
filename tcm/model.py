@@ -182,7 +182,7 @@ class TopicContextModel:
                                         * (
                                             topics_words[t, i]
                                             if i < n_features
-                                            else len(self.words)
+                                            else 1.0 / len(self.words)
                                         )
                                         * tdata[t]
                                     )
@@ -200,7 +200,7 @@ class TopicContextModel:
                                         (
                                             topics_words[t, i]
                                             if i < n_features
-                                            else len(self.words)
+                                            else 1.0 / len(self.words)
                                         )
                                         * tdata[t]
                                         for t in range(self.model.n_components)
