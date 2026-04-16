@@ -142,7 +142,7 @@ class TopicContextModel:
          * verbose: verbosity level,
          * batch_size: batch size,
         """
-        assert self.words is None
+        assert self.words is not None
 
         def surprisal(doc: csr_matrix, stype: str) -> tuple[list[float], list[int]]:
             assert stype in ["lda"]
